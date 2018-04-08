@@ -22,7 +22,7 @@ We could achieve this using two types of channeling.
 1. Pollable Channel
 2. Subscribable Channel
 
-**Using Pollable channel:**
+**Using Subscribable channel:**
 
 We need to add two dependencies, org.springframework.integration:spring-integration-stream and org.springframework.integration:spring-integration-core into the build.gradle
 
@@ -51,23 +51,80 @@ C. Let's create two consumers. stdout-channel adapter wraps the java standard ou
      <int-stream:stdout-channel-adapter
              id="consumer2" channel="messageChannel" append-newline="true" />`
              
-D. Let's add poller channel configuration that would keep polling the channel for messages.  There is no buffer. So, high availability of consumer is essential to avoid message loss.
+D. Let's add poller channel configuration that is used by std-in adapter used to determine how frequently should it check for new messages in java standard output stream.
 
 `<int:poller id="defaultPoller" default="true"
                  max-messages-per-poll="5" fixed-rate="2000" />`
                  
-It polls the channel every 2 seconds here.
+It polls the channel every 2 seconds here. 
 
-E. All the configurations are ready. We need to register these bean definitions in spring. Create a class called StartUp.java and add main method with the following code.
+E. Producers and consumers are ready. Let's add the channel configuration which is used to deliver message from producer to consumer. Here's we use Subscribable channel. Subscribable channels do not buffer messages. Instead they deliver to all subscribers (here stdout-channel adapters)
+`<int:publish-subscribe-channel id="messageChannel" />`
+
+You could see that channel's id and channel reference in producer and consumer are the same.
+
+F. All the configurations are ready. We need to register these bean definitions in spring. Create a class called StartUp.java and add main method with the following code.
 
 `ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext(
  				"/META-INF/spring/si-components.xml");`
  				
-This initializes the spring application context. 
+This initializes the spring application context.
 
+**Using Pollable Channel**
+
+Steps A,B,C,D and F are same. Replace step E with the following code:
+
+`<int:channel id="messageChannel">
+         <int:queue capacity="2" />
+     </int:channel>`
+     
+Pollable channel has buffer. It can hold messages. but, the drawback is it can deliver message to only one subscriber. hence it's called point-to-point channel. When more than one subscriber is added to the configuration. It skips everything except the first one.
+
+The last type of channel is direct channel which is the default channel type used for <int:channel>. It's also a one-to-one channel.
+
+`<int:channel id="messageChannel">
+     </int:channel>`
+     
+**Can you view the messages in the buffer?**
+
+Since pollable and direct channels can buffer messages, we could comment out the consumer and producer configurations from si-components.xml
+Add the following snippet to your SpringIntegrationDemoApplication.java.
+
+`MessageChannel channel = context.getBean("messageChannel", MessageChannel.class);
+ 
+ 		Message<String> message1 = MessageBuilder.withPayload("Hello world 1!").build();
+ 		Message<String> message2 = MessageBuilder.withPayload("Hello world 2!").build();
+ 		Message<String> message3 = MessageBuilder.withPayload("Hello world 3!").build();
+ 
+ 
+ 		System.out.println("Sending message 1");
+ 		channel.send(message1);
+ 
+ 		System.out.println("Sending message 2");
+ 		channel.send(message2);
+ 
+ 		System.out.println("Sending message 3");
+ 		channel.send(message3);
+ 
+ 		System.out.println("Sent all the messages");`
+You would see the following o/p:
+
+`Sending message 1
+ Sending message 2
+ Sending message 3`
+ 
+ But not the last message, Sent all the messages. Because the queue capacity is configured to 2. You could play around with the queue capacity by changing it's value.
+ 
 **Run the application:**
 
 Type in to the console "abc" (example). You would see the text turning to green and it's picked by the consumers and print the same text twice one after the other.
+**Note:**
+If you're unable to type and view messages in console due to the continuous spring debug log messages, please add the following configuration to your build.gradle file:
+
+`configurations.all {
+ 	exclude group:"ch.qos.logback", module:"logback-classic"
+ }`
+ 
              
    
 
