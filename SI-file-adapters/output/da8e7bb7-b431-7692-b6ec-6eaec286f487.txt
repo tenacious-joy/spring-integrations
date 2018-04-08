@@ -1,0 +1,1 @@
+Aswini Jayaraman is trying to implement File reading and writing using spring-integration-components
